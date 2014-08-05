@@ -26,7 +26,7 @@ import android.util.JsonReader;
 
 /**
  * The Playbasis Object
- * @author eddie.playbasis
+ * @author Playbasis Team
  */
 public class Playbasis
 {
@@ -45,6 +45,12 @@ public class Playbasis
 		instance = this;
 	}
 	
+	/**
+	 * Authentication procedure on playbasis
+	 * @param apiKey
+	 * @param apiSecret
+	 * @return true if request is successful
+	 */
 	public boolean auth(String apiKey, String apiSecret)
 	{
 		apiKeyParam = "?api_key=" + apiKey;
@@ -102,9 +108,116 @@ public class Playbasis
 		}
 	}
 	
+	/**
+	 * Renew the authentification
+	 * @param apiKey
+	 * @param apiSecret
+	 * @return true if request is successful
+	 */
+	public boolean renew(String apiKey, String apiSecret)
+	{
+		apiKeyParam = "?api_key=" + apiKey;
+		String param = "";
+		try
+		{
+			param = "api_key=" + URLEncoder.encode(apiKey, "UTF-8") + 
+					"&api_secret=" + URLEncoder.encode(apiSecret, "UTF-8");	
+		}
+		catch (UnsupportedEncodingException e)
+		{
+			return false;
+		}
+		try
+		{
+			JsonReader reader = callJSON("Auth/renew", param);
+			while(true)
+			{
+				switch(reader.peek())
+				{
+				case BEGIN_OBJECT:
+					reader.beginObject();
+					break;
+				case END_OBJECT:
+					reader.endObject();
+					break;
+				case BEGIN_ARRAY:
+					reader.beginArray();
+					break;
+				case END_ARRAY:
+					reader.endArray();
+					break;
+				case END_DOCUMENT:
+					reader.close();
+					return false;
+				case NAME:
+					String name = reader.nextName();
+					if(name.equals("token"))
+					{
+						token = reader.nextString();
+						reader.close();
+						return true;
+					}
+					break;
+				default:
+					reader.skipValue();
+					break;
+				}
+				
+			}
+		}
+		catch (IOException e)
+		{
+			return false;
+		}
+	}
+	
+	/**
+	 * Get information for a player. Fields include
+	 * image
+	 * email
+	 * username
+	 * exp
+	 * level
+	 * first_name
+	 * last_name
+	 * gender
+	 * birth_date
+	 * registered
+	 * last_login
+	 * last_logout
+	 * cl_player_id
+	 * @param playerId
+	 * @return
+	 */
 	public JsonReader player(String playerId)
 	{
 		return callJSON("Player/"+playerId, "token="+token);
+	}
+	/*
+	 * Get detailed information about a player, including points and badges
+	 */
+	public JsonReader playerDetail(String playerId)
+	{
+		return callJSON("Player/"+playerId+"/data/all", "token="+token);
+	}
+	/*
+	 * playerListId player id as used in client's website separate with ',' example '1,2,3'
+	 */
+	public JsonReader playerList(String playerListId)
+	{
+		StringBuilder param = new StringBuilder();
+		try
+		{
+			param.append("token=");
+			param.append(token);
+			param.append("&list_player_id=");
+			param.append(URLEncoder.encode(playerListId, "UTF-8"));
+		}
+		catch (UnsupportedEncodingException e)
+		{
+			return null;
+		}
+		return callJSON("Player/list", param.toString());
 	}
 	
 	/*
@@ -144,51 +257,223 @@ public class Playbasis
 		return callJSON("Player/"+playerId+"/register", param.toString());
 	}
 	
+	/*
+	 * @param	updateData	    Key-value for data to be updated.
+	 * 							The following keys are supported:
+	  *							- username
+	 *							- email
+	 *							- image
+	 *							- exp
+	 *							- level
+	 * 							- facebook_id
+	 * 							- twitter_id
+	 * 							- password		assumed hashed
+	 * 							- first_name
+	 * 							- last_name
+	 * 							- nickname
+	 * 							- gender		1=Male, 2=Female
+	 * 							- birth_date	format YYYY-MM-DD
+	 */
+	public JsonReader update(String playerId, String... updateData) throws UnsupportedEncodingException
+	{
+		StringBuilder param = new StringBuilder();
+		param.append("token=");
+		param.append(token);
+		
+		for(int i=0; i<updateData.length; ++i)
+			param.append("&"+updateData[i]);
+		
+		return callJSON("Player/"+playerId+"/update", param.toString());
+	}
+	
+	/**
+     * Delete a player
+     * @param playerId
+     * @return
+     */
+	public JsonReader delete(String playerId) throws UnsupportedEncodingException
+	{		
+		return callJSON("Player/"+playerId+"/delete", "token="+token);
+	}
+	
+	/**
+	 * Call login action on server
+	 * @param playerId
+	 * @return
+	 */
 	public JsonReader login(String playerId)
 	{
 		return callJSON("Player/"+playerId+"/login", "token="+token);
 	}
 	
+	/**
+	 * Call logout action on server
+	 * @param playerId
+	 * @return
+	 */
 	public JsonReader logout(String playerId)
 	{
 		return callJSON("Player/"+playerId+"/logout", "token="+token);
 	}
 	
+	/**
+	 * Returns information about all point-based rewards that a player currently have.
+	 * @param playerId
+	 * @return
+	 */
 	public JsonReader points(String playerId)
 	{
 		return callJSON("Player/"+playerId+"/points"+apiKeyParam, null);
 	}
 	
+	/**
+	 * Returns how much of specified the point-based reward a player currently have.
+	 * @param playerId
+	 * @param pointName
+	 * @return
+	 */
 	public JsonReader point(String playerId, String pointName)
 	{
 		return callJSON("Player/"+playerId+"/point/"+pointName+apiKeyParam, null);
 	}
 	
+	/**
+     * Returns reward a player currently have.
+     * @param playerId
+     * @param pointName
+     * @param offset
+     * @param limit
+     * @return
+     */
+	public JsonReader pointHistory(String playerId, String pointName, int offset, int limit)
+    {
+        String stringQuery = "&offset="+offset+"&limit"+limit;
+        if(!pointName.isEmpty() && pointName != null){
+            stringQuery = stringQuery+"&point_name="+pointName;
+        }
+        return callJSON("Player/"+playerId+"/point/"+pointName+apiKeyParam+stringQuery, null);
+    }
+	
+	/**
+	 * Returns the time and action that a player last performed.
+	 * @param playerId
+	 * @return
+	 */
 	public JsonReader actionLastPerformed(String playerId)
 	{
 		return callJSON("Player/"+playerId+"/action/time"+apiKeyParam, null);
 	}
 	
+	/**
+	 * Returns the last time that player performed the specified action.
+	 * @param playerId
+	 * @param actionName
+	 * @return
+	 */
 	public JsonReader actionLastPerformedTime(String playerId, String actionName)
 	{
 		return callJSON("Player/"+playerId+"/action/"+actionName+"/time"+apiKeyParam, null);
 	}
 	
+	/**
+	 * Returns the number of times that a player has performed the specified action.
+	 * @param playerId
+	 * @param actionName
+	 * @return
+	 */
 	public JsonReader actionPerformedCount(String playerId, String actionName)
 	{
 		return callJSON("Player/"+playerId+"/action/"+actionName+"/count"+apiKeyParam, null);
 	}
 	
+	/**
+	 * Returns information about all the badges that a player has earned.
+	 * @param playerId
+	 * @return
+	 */
 	public JsonReader badgeOwned(String playerId)
 	{
 		return callJSON("Player/"+playerId+"/badge"+apiKeyParam, null);
 	}
 	
+	/**
+	 * Returns list of top players according to specified point type.
+	 * @param rankedBy
+	 * @param limit
+	 * @return
+	 */
 	public JsonReader rank(String rankedBy, int limit)
 	{
 		return callJSON("Player/rank/"+rankedBy+"/"+String.valueOf(limit)+apiKeyParam, null);
 	}
 	
+	/**
+	 * Returns list of top players.
+	 * @param limit
+	 * @return
+	 */
+	public JsonReader ranks(int limit)
+	{
+		return callJSON("Player/ranks/"+String.valueOf(limit)+apiKeyParam, null);
+	}
+	
+	/**
+	 * Returns information about specified level.
+	 * @param lv
+	 * @return
+	 */
+	public JsonReader level(int lv)
+	{
+		return callJSON("Player/level/"+String.valueOf(lv)+apiKeyParam, null);
+	}
+     /**
+	 * Returns information of all levels.
+	 * @return
+	 */
+	public JsonReader levels()
+	{
+		return callJSON("Player/levels/"+apiKeyParam, null);
+	}
+	
+	public JsonReader claimBadge(String playerId, String badgeId){
+		StringBuilder param = new StringBuilder();
+		param.append("token=");
+		param.append(token);
+		
+		return callJSON("Player/"+playerId+"/badge/"+badgeId+"/claim"+apiKeyParam, param.toString());	
+	}
+	public JsonReader redeemBadge(String playerId, String badgeId){
+		StringBuilder param = new StringBuilder();
+		param.append("token=");
+		param.append(token);
+		
+		return callJSON("Player/"+playerId+"/badge/"+badgeId+"/redeem"+apiKeyParam, param.toString());	
+	}
+	
+	/**
+	 * Returns information about all the goods list that a player has redeem.
+	 * @param playerId player id as used in client's website
+	 * @return
+	 */
+	public JsonReader playerGoods(String playerId)
+	{
+		return callJSON("Player/"+playerId+"/goods"+apiKeyParam, null);
+	}
+	
+	public JsonReader questOfPlayer(String playerId, String questId)
+	{
+		return callJSON("Player/quest/"+questId+apiKeyParam+"&player_id="+playerId, null);
+	}
+	
+	public JsonReader questListOfPlayer(String playerId)
+	{
+		return callJSON("Player/quest"+apiKeyParam+"&player_id="+playerId, null);
+	}
+	
+	/**
+	 * Returns information about all available badges for the current site.
+	 * @return
+	 */
 	public JsonReader badges()
 	{
 		return callJSON("Badge"+apiKeyParam, null);
@@ -199,16 +484,28 @@ public class Playbasis
 		return callJSON("Badge/"+badgeId+apiKeyParam, null);
 	}
 	
-	public JsonReader badgeCollections()
+	/**
+	 * Returns information about the goods with the specified id.
+	 * @param goodId
+	 * @return
+	 */
+	public JsonReader goodInfo(String goodId)
 	{
-		return callJSON("Badge/collection"+apiKeyParam, null);
+		return callJSON("Goods/"+goodId+apiKeyParam, null);
+	}
+	/**
+	 * Returns information about all available goods for the current site.
+	 * @return
+	 */
+	public JsonReader goodsList()
+	{
+		return callJSON("Goods/"+apiKeyParam, null);
 	}
 	
-	public JsonReader badgeCollection(String collectionId)
-	{
-		return callJSON("Badge/collection/"+collectionId+apiKeyParam, null);
-	}
-	
+	/**
+	 * Returns names of actions that can trigger game rules within a client’s website.
+	 * @return
+	 */
 	public JsonReader actionConfig()
 	{
 		return callJSON("Engine/actionConfig"+apiKeyParam, null);
@@ -242,6 +539,129 @@ public class Playbasis
 			return null;
 		}
 		return callJSON("Engine/rule", param.toString());	
+	}
+	
+	/**
+	 * Returns information about the quest with the specified id.
+	 * @param questId
+	 * @return
+	 */
+	public JsonReader quest(String questId)
+	{
+		return callJSON("Quest/"+questId+apiKeyParam, null);
+	}
+	/**
+	 * Returns information about all quest for the current site.
+	 * @return
+	 */
+	public JsonReader quests()
+	{
+		return callJSON("Quest"+apiKeyParam, null);
+	}
+	
+	/**
+	 * Returns information about mission with the specified id.
+	 * @param questId
+	 * @param missionId
+	 * @return
+	 */
+	public JsonReader mission(String questId, String missionId)
+	{
+		return callJSON("Quest/"+questId+"/mission/"+missionId+apiKeyParam, null);
+	}
+	
+	/**
+	 * Returns information about all available quest for the player.
+	 * @param playerId
+	 * @return
+	 */
+	public JsonReader questsAvailable(String playerId)
+	{
+		return callJSON("Quest/available"+apiKeyParam+"&player_id="+playerId, null);
+	}
+	
+	/**
+	 * check the quest is available/unavailable for player.
+	 * @param questId
+	 * @param playerId
+	 * @return
+	 */
+	public JsonReader questAvailable(String questId, String playerId)
+	{
+		return callJSON("Quest/"+questId+"/available"+apiKeyParam+"&player_id="+playerId, null);
+	}
+	
+	public JsonReader joinQuest(String questId, String playerId)
+	{	
+		StringBuilder param = new StringBuilder();
+		try
+		{
+			param.append("token=");
+			param.append(token);
+			param.append("&player_id=");
+			param.append(URLEncoder.encode(playerId, "UTF-8"));
+		}
+		catch (UnsupportedEncodingException e)
+		{
+			return null;
+		}
+		
+		return callJSON("Quest/"+questId+"/join", param.toString());
+	}
+	
+	public JsonReader cancelQuest(String questId, String playerId)
+	{	
+		StringBuilder param = new StringBuilder();
+		try
+		{
+			param.append("token=");
+			param.append(token);
+			param.append("&player_id=");
+			param.append(URLEncoder.encode(playerId, "UTF-8"));
+		}
+		catch (UnsupportedEncodingException e)
+		{
+			return null;
+		}
+		
+		return callJSON("Quest/"+questId+"/cancel", param.toString());
+	}
+	
+	public JsonReader redeemGoods(String goodsId, String playerId, int amount)
+	{	
+		StringBuilder param = new StringBuilder();
+		try
+		{
+			param.append("token=");
+			param.append(token);
+			param.append("&quest_id=");
+			param.append(URLEncoder.encode(playerId, "UTF-8"));
+			param.append("&player_id=");
+			param.append(URLEncoder.encode(playerId, "UTF-8"));
+			param.append("&amount=");
+			param.append(URLEncoder.encode(playerId, "UTF-8"));
+		}
+		catch (UnsupportedEncodingException e)
+		{
+			return null;
+		}
+		
+		return callJSON("Redeem/goods", param.toString());
+	}
+	
+	public JsonReader recentPoint(int offset, int limit)
+	{
+		String stringQuery = "&offset="+offset+"&limit"+limit;
+		return callJSON("Service/recent_point"+apiKeyParam+stringQuery, null);
+	}
+
+	public JsonReader recentPointByName(String pointName, int offset, int limit)
+	{
+		String stringQuery = "&offset="+offset+"&limit"+limit;
+        if(!pointName.isEmpty() && pointName != null){
+            stringQuery = stringQuery+"&point_name="+pointName;
+        }
+		return callJSON("Service/recent_point"+apiKeyParam+stringQuery, null);
 	}
 	
 	public static String call(String method, String data)
